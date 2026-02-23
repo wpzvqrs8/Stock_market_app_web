@@ -1,0 +1,97 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alphine
+    container_name: nq_db
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: neuroquant_india
+    volumes:
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - nq_db_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7-alpine
+    container_name: nq_redis
+    ports:
+      - "6379:6379"
+
+  data-service:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: nq_data_service
+    command: uvicorn data_service.main:app --host 0.0.0.0 --port 8001
+    ports:
+      - "8001:8001"
+    environment:
+      - DATABASE_URL=postgresql://admin:password@db/neuroquant_india
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - db
+      - redis
+
+  news-service:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: nq_news_service
+    command: uvicorn news_service.main:app --host 0.0.0.0 --port 8002
+    ports:
+      - "8002:8002"
+    depends_on:
+      - db
+
+  volatility-service:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: nq_vol_service
+    command: uvicorn volatility_service.main:app --host 0.0.0.0 --port 8003
+    ports:
+      - "8003:8003"
+    depends_on:
+      - db
+
+  risk-engine:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: nq_risk_engine
+    command: uvicorn risk_engine.main:app --host 0.0.0.0 --port 8004
+    ports:
+      - "8004:8004"
+    depends_on:
+      - db
+
+  rl-engine:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: nq_rl_engine
+    command: uvicorn rl_engine.main:app --host 0.0.0.0 --port 8005
+    ports:
+      - "8005:8005"
+    depends_on:
+      - db
+
+  fusion-engine:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: nq_fusion_engine
+    command: uvicorn fusion_engine.main:app --host 0.0.0.0 --port 8006
+    ports:
+      - "8006:8006"
+    depends_on:
+      - data-service
+      - news-service
+      - volatility-service
+      - risk-engine
+
+volumes:
+  nq_db_data:
